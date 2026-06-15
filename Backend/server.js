@@ -34,6 +34,85 @@ const io = new Server(httpServer, {
 //   timerInterval: Object (NodeJS.Timeout)
 // }
 const rooms = {};
+let matchmakingQueue = [];
+let matchmakingTimeout = null;
+
+// Helper to group matchmaking players and start game
+function createMatchmakingRoom(group) {
+  const roomId = generateRoomCode();
+  const text = getRandomParagraph();
+  
+  const players = group.map((p, idx) => ({
+    id: p.id,
+    name: p.name,
+    wpm: 0,
+    accuracy: 100,
+    progress: 0,
+    isReady: true, // Auto ready for matchmaking
+    isHost: idx === 0,
+    finished: false,
+    finishRank: null
+  }));
+
+  rooms[roomId] = {
+    id: roomId,
+    text,
+    status: "waiting",
+    countdown: 5,
+    timeLeft: 60,
+    players,
+    timerInterval: null,
+    mode: "normal"
+  };
+
+  group.forEach((p) => {
+    const socket = io.sockets.sockets.get(p.id);
+    if (socket) {
+      socket.join(roomId);
+      socket.emit("room-joined", {
+        room: {
+          id: roomId,
+          text,
+          status: "waiting",
+          countdown: 5,
+          timeLeft: 60,
+          players,
+          mode: "normal"
+        },
+        myId: p.id
+      });
+    }
+  });
+
+  console.log(`Matchmaking: Created Room ${roomId} for players: ${group.map(p => p.name).join(", ")}`);
+  
+  // Instantly start the countdown for matchmaking!
+  startCountdown(roomId);
+}
+
+function checkMatchmakingQueue() {
+  if (matchmakingQueue.length >= 4) {
+    const group = matchmakingQueue.splice(0, 4);
+    createMatchmakingRoom(group);
+    
+    // Clear timeout if queue has < 2 players left
+    if (matchmakingQueue.length < 2 && matchmakingTimeout) {
+      clearTimeout(matchmakingTimeout);
+      matchmakingTimeout = null;
+    }
+  } else if (matchmakingQueue.length >= 2) {
+    // Start a 10s wait timer if not already running
+    if (!matchmakingTimeout) {
+      matchmakingTimeout = setTimeout(() => {
+        if (matchmakingQueue.length >= 2) {
+          const group = matchmakingQueue.splice(0, matchmakingQueue.length);
+          createMatchmakingRoom(group);
+        }
+        matchmakingTimeout = null;
+      }, 10000);
+    }
+  }
+}
 
 // Generate a random room code (5 chars, uppercase)
 function generateRoomCode() {
@@ -99,7 +178,8 @@ function startCountdown(roomId) {
     status: room.status,
     countdown: room.countdown,
     timeLeft: room.timeLeft,
-    players: room.players
+    players: room.players,
+    mode: room.mode
   });
 
   room.timerInterval = setInterval(() => {
@@ -121,6 +201,56 @@ function startCountdown(roomId) {
 
 io.on("connection", (socket) => {
   console.log(`User connected: ${socket.id}`);
+
+  // Matchmaking handlers
+  socket.on("join-matchmaking", ({ playerName }) => {
+    // Avoid duplicate queue entry
+    if (matchmakingQueue.find((p) => p.id === socket.id)) return;
+    
+    const name = playerName || `Player_${socket.id.substring(0, 4)}`;
+    matchmakingQueue.push({ id: socket.id, name });
+    console.log(`Matchmaking: ${name} (${socket.id}) joined queue. Queue size: ${matchmakingQueue.length}`);
+    
+    checkMatchmakingQueue();
+  });
+
+  socket.on("leave-matchmaking", () => {
+    const idx = matchmakingQueue.findIndex((p) => p.id === socket.id);
+    if (idx !== -1) {
+      const removed = matchmakingQueue.splice(idx, 1)[0];
+      console.log(`Matchmaking: ${removed.name} left queue. Queue size: ${matchmakingQueue.length}`);
+      
+      // If queue is empty or has < 2 players, reset timeout
+      if (matchmakingQueue.length < 2 && matchmakingTimeout) {
+        clearTimeout(matchmakingTimeout);
+        matchmakingTimeout = null;
+      }
+    }
+  });
+
+  // Room mode settings (Host only)
+  socket.on("set-room-mode", ({ roomId, mode }) => {
+    const code = roomId?.trim().toUpperCase();
+    const room = rooms[code];
+    if (!room || room.status !== "waiting") return;
+
+    // Verify requesting player is host
+    const player = room.players.find((p) => p.id === socket.id);
+    if (player && player.isHost) {
+      room.mode = mode;
+      console.log(`Room ${code} mode set to ${mode}`);
+
+      io.to(code).emit("room-updated", {
+        id: room.id,
+        text: room.text,
+        status: room.status,
+        countdown: room.countdown,
+        timeLeft: room.timeLeft,
+        players: room.players,
+        mode: room.mode
+      });
+    }
+  });
 
   // 1. Create Room
   socket.on("create-room", ({ playerName }) => {
@@ -147,7 +277,8 @@ io.on("connection", (socket) => {
         countdown: 5,
         timeLeft: 60,
         players: [newPlayer],
-        timerInterval: null
+        timerInterval: null,
+        mode: "normal"
       };
 
       socket.join(roomId);
@@ -160,7 +291,8 @@ io.on("connection", (socket) => {
           status: rooms[roomId].status,
           countdown: rooms[roomId].countdown,
           timeLeft: rooms[roomId].timeLeft,
-          players: rooms[roomId].players
+          players: rooms[roomId].players,
+          mode: rooms[roomId].mode
         },
         myId: socket.id
       });
@@ -214,7 +346,8 @@ io.on("connection", (socket) => {
           status: room.status,
           countdown: room.countdown,
           timeLeft: room.timeLeft,
-          players: room.players
+          players: room.players,
+          mode: room.mode
         },
         myId: socket.id
       });
@@ -226,7 +359,8 @@ io.on("connection", (socket) => {
         status: room.status,
         countdown: room.countdown,
         timeLeft: room.timeLeft,
-        players: room.players
+        players: room.players,
+        mode: room.mode
       });
     } catch (error) {
       console.error("Error joining room:", error);
@@ -251,7 +385,8 @@ io.on("connection", (socket) => {
         status: room.status,
         countdown: room.countdown,
         timeLeft: room.timeLeft,
-        players: room.players
+        players: room.players,
+        mode: room.mode
       });
 
       // If all players are ready, trigger countdown automatically
@@ -308,7 +443,8 @@ io.on("connection", (socket) => {
         status: room.status,
         countdown: room.countdown,
         timeLeft: room.timeLeft,
-        players: room.players
+        players: room.players,
+        mode: room.mode
       });
 
       // If everyone is finished now, end game early
@@ -354,7 +490,8 @@ io.on("connection", (socket) => {
         status: room.status,
         countdown: room.countdown,
         timeLeft: room.timeLeft,
-        players: room.players
+        players: room.players,
+        mode: room.mode
       });
     }
   });
@@ -416,7 +553,8 @@ io.on("connection", (socket) => {
           status: room.status,
           countdown: room.countdown,
           timeLeft: room.timeLeft,
-          players: room.players
+          players: room.players,
+          mode: room.mode
         });
       }
     }
@@ -434,6 +572,15 @@ io.on("connection", (socket) => {
     Object.keys(rooms).forEach((roomId) => {
       leaveRoom(roomId);
     });
+    // Remove from matchmaking queue
+    const qIdx = matchmakingQueue.findIndex((p) => p.id === socket.id);
+    if (qIdx !== -1) {
+      matchmakingQueue.splice(qIdx, 1);
+      if (matchmakingQueue.length < 2 && matchmakingTimeout) {
+        clearTimeout(matchmakingTimeout);
+        matchmakingTimeout = null;
+      }
+    }
   });
 });
 

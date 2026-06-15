@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { Room } from '../types';
-import { Car, Timer } from 'lucide-react';
+import { Timer } from 'lucide-react';
+import { VirtualKeyboard } from './VirtualKeyboard';
+import { RacetrackCanvas } from './RacetrackCanvas';
 
 interface GameInterfaceProps {
   room: Room;
@@ -80,6 +82,15 @@ export const GameInterface: React.FC<GameInterfaceProps> = ({
     // Prevent typing beyond the prompt length
     if (val.length > promptText.length) return;
 
+    // Hardcore mode check: Typo resets progress to 0
+    if (room.mode === 'hardcore') {
+      if (val.length > 0 && val[val.length - 1] !== promptText[val.length - 1]) {
+        setTypedText('');
+        setCurrentIndex(0);
+        return;
+      }
+    }
+
     setTypedText(val);
     setCurrentIndex(val.length);
   };
@@ -92,41 +103,14 @@ export const GameInterface: React.FC<GameInterfaceProps> = ({
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', marginTop: '1rem' }}>
       
       {/* 1. Track representation for racing */}
-      <div className="glass-panel" style={{ padding: '1.5rem' }}>
+      <div className="glass-panel" style={{ padding: '1.25rem' }}>
         <h3 style={{ margin: '0 0 1rem 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span>Race Track</span>
           <span className="badge badge-ready" style={{ textTransform: 'none', background: 'rgba(6, 182, 212, 0.15)', color: 'var(--secondary)' }}>
             Status: RACING
           </span>
         </h3>
-        
-        <div className="racetrack-container">
-          {room.players.map((player) => {
-            const isMe = player.id === myId;
-            return (
-              <div key={player.id} className="race-lane">
-                {/* Player Name */}
-                <div className={`lane-player-info ${isMe ? 'is-me' : ''}`}>
-                  {player.name} {isMe && '(You)'}
-                </div>
-                
-                {/* Track lane */}
-                <div className="lane-track">
-                  <div 
-                    className={`lane-car ${isMe ? 'is-me' : ''}`}
-                    style={{ left: `calc(${player.progress}% - 24px)` }}
-                  >
-                    <Car className="car-icon" size={24} />
-                    <span className="car-label">
-                      {player.wpm} WPM
-                    </span>
-                  </div>
-                  <div className="lane-finish-line" />
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        <RacetrackCanvas room={room} myId={myId} />
       </div>
 
       {/* 2. Main Typing Board */}
@@ -182,9 +166,14 @@ export const GameInterface: React.FC<GameInterfaceProps> = ({
               classes.push('char-current');
             }
 
+            // Blind mode obfuscation
+            const displayChar = (room.mode === 'blind' && index > currentIndex)
+              ? (char === ' ' ? ' ' : '•')
+              : char;
+
             return (
               <span key={index} className={classes.join(' ')}>
-                {char}
+                {displayChar}
               </span>
             );
           })}
@@ -213,6 +202,11 @@ export const GameInterface: React.FC<GameInterfaceProps> = ({
           <div className="stat-val">{currentIndex} / {promptText.length}</div>
           <div className="stat-lbl">Characters Typed</div>
         </div>
+      </div>
+
+      {/* 4. Keyboard Overlay */}
+      <div style={{ marginTop: '0.5rem', width: '100%' }}>
+        <VirtualKeyboard />
       </div>
 
     </div>

@@ -4,7 +4,7 @@ import type { Room, ChatMessage } from './types';
 import { GameLobby } from './components/GameLobby';
 import { GameInterface } from './components/GameInterface';
 import { GameLeaderboard } from './components/GameLeaderboard';
-import { Keyboard, ArrowRight, Play, AlertCircle, Sparkles } from 'lucide-react';
+import { Keyboard, ArrowRight, Play, AlertCircle, Sparkles, Loader2 } from 'lucide-react';
 import './App.css';
 
 // Initialize socket client
@@ -22,6 +22,8 @@ function App() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [isSearchingMatch, setIsSearchingMatch] = useState(false);
+  const [searchTimer, setSearchTimer] = useState(0);
 
   // Initialize socket connection
   useEffect(() => {
@@ -45,6 +47,8 @@ function App() {
       setJoined(true);
       setChatMessages([]);
       setError(null);
+      setIsSearchingMatch(false);
+      setSearchTimer(0);
     });
 
     socket.on('room-updated', (updatedRoom: Room) => {
@@ -160,6 +164,40 @@ function App() {
     setJoined(false);
   };
 
+  // Matchmaking elapsed timer
+  useEffect(() => {
+    let interval: any;
+    if (isSearchingMatch) {
+      interval = setInterval(() => {
+        setSearchTimer(prev => prev + 1);
+      }, 1000);
+    } else {
+      setSearchTimer(0);
+    }
+    return () => clearInterval(interval);
+  }, [isSearchingMatch]);
+
+  const handleJoinMatchmaking = () => {
+    const name = playerName.trim() || `Player_${Math.floor(1000 + Math.random() * 9000)}`;
+    if (!playerName.trim()) {
+      handleNameChange(name);
+    }
+    setIsSearchingMatch(true);
+    setSearchTimer(0);
+    socket.emit('join-matchmaking', { playerName: name });
+  };
+
+  const handleLeaveMatchmaking = () => {
+    setIsSearchingMatch(false);
+    setSearchTimer(0);
+    socket.emit('leave-matchmaking');
+  };
+
+  const handleSetRoomMode = (mode: 'normal' | 'hardcore' | 'blind') => {
+    if (!room) return;
+    socket.emit('set-room-mode', { roomId: room.id, mode });
+  };
+
   return (
     <>
       {/* Header */}
@@ -222,7 +260,22 @@ function App() {
 
       {/* Main Content Area */}
       <main style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-        {!joined ? (
+        {isSearchingMatch ? (
+          /* Matchmaking Loading Overlay */
+          <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', alignItems: 'center', textAlign: 'center', maxWidth: '400px', margin: '0 auto', width: '100%', padding: '2.5rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+              <Loader2 className="pulse-glow" size={48} color="var(--secondary)" style={{ animation: 'spin 1.5s linear infinite' }} />
+            </div>
+            <h2 style={{ margin: 0 }}>Finding Race...</h2>
+            <p style={{ margin: 0, fontSize: '0.95rem' }}>Searching for other racers. Pairing will force-start after 10 seconds.</p>
+            <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--primary)', margin: '0.5rem 0' }}>
+              Elapsed: {searchTimer}s
+            </div>
+            <button className="btn btn-outline" onClick={handleLeaveMatchmaking} style={{ width: '100%' }}>
+              Cancel Search
+            </button>
+          </div>
+        ) : !joined ? (
           /* Home Screen: Join or Create Room */
           <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '2rem', maxWidth: '500px', margin: '0 auto', width: '100%' }}>
             
@@ -246,9 +299,14 @@ function App() {
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', borderTop: '1px solid var(--border-color)', paddingTop: '1.5rem' }}>
+                {/* Quick Match matchmaking button */}
+                <button className="btn btn-secondary" onClick={handleJoinMatchmaking} style={{ width: '100%', background: 'linear-gradient(135deg, var(--secondary) 0%, #0891b2 100%)', boxShadow: '0 4px 14px 0 var(--secondary-glow)' }}>
+                  <Sparkles size={18} fill="#fff" /> Quick Match (Online Race)
+                </button>
+
                 {/* Create Room Button */}
                 <button className="btn btn-primary" onClick={handleCreateRoom} style={{ width: '100%' }}>
-                  <Play size={18} fill="#fff" /> Create New Race Room
+                  <Play size={18} fill="#fff" /> Create Private Race Room
                 </button>
                 
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
@@ -287,6 +345,7 @@ function App() {
                   onToggleReady={handleToggleReady}
                   onStartGame={handleStartGame}
                   onLeaveRoom={handleLeaveRoom}
+                  onSetRoomMode={handleSetRoomMode}
                 />
               )}
 

@@ -10,6 +10,7 @@ interface GameLobbyProps {
   onToggleReady: (ready: boolean) => void;
   onStartGame: () => void;
   onLeaveRoom: () => void;
+  onSetRoomMode?: (mode: 'normal' | 'hardcore' | 'blind') => void;
 }
 
 export const GameLobby: React.FC<GameLobbyProps> = ({
@@ -19,7 +20,8 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
   onSendMessage,
   onToggleReady,
   onStartGame,
-  onLeaveRoom
+  onLeaveRoom,
+  onSetRoomMode
 }) => {
   const [copied, setCopied] = useState(false);
   const [messageText, setMessageText] = useState('');
@@ -74,6 +76,48 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
             {copied ? <Check size={18} /> : <Copy size={18} />}
             {copied ? 'Copied!' : 'Copy Code'}
           </button>
+        </div>
+
+        {/* Game Mode Settings */}
+        <div style={{ background: 'rgba(0,0,0,0.25)', border: '1px solid var(--border-color)', padding: '1rem', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <span style={{ fontSize: '0.8rem', textTransform: 'uppercase', color: 'var(--text-secondary)', letterSpacing: '0.05em' }}>Game Mode</span>
+            {isHost ? (
+              <div style={{ marginTop: '0.25rem' }}>
+                <select
+                  value={room.mode || 'normal'}
+                  onChange={(e) => onSetRoomMode?.(e.target.value as 'normal' | 'hardcore' | 'blind')}
+                  style={{
+                    background: 'var(--bg-dark)',
+                    color: 'var(--text-primary)',
+                    border: '1px solid var(--border-color)',
+                    padding: '0.4rem 0.8rem',
+                    borderRadius: '6px',
+                    fontSize: '1rem',
+                    fontFamily: 'var(--font-sans)',
+                    fontWeight: 600,
+                    outline: 'none',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <option value="normal">Normal (Free Typing)</option>
+                  <option value="hardcore">Hardcore (Typo resets to 0)</option>
+                  <option value="blind">Blind (Letters are hidden)</option>
+                </select>
+              </div>
+            ) : (
+              <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--primary)', marginTop: '0.25rem' }}>
+                {room.mode === 'hardcore' ? 'Hardcore Mode' : room.mode === 'blind' ? 'Blind Mode' : 'Normal Mode'}
+              </div>
+            )}
+          </div>
+          <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', maxWidth: '50%', textAlign: 'right' }}>
+            {room.mode === 'hardcore' 
+              ? 'Warning: Any typo resets your progress to 0%!' 
+              : room.mode === 'blind' 
+              ? 'Blind: All letters ahead of the cursor are hidden!' 
+              : 'Normal: Free-typing. Backspace to correct errors.'}
+          </div>
         </div>
 
         {/* Player Grid */}
