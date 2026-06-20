@@ -37,6 +37,7 @@ const io = new Server(httpServer, {
 const rooms = {};
 let matchmakingQueue = [];
 let matchmakingTimeout = null;
+const DEFAULT_CAR_COLORS = ['#06b6d4', '#a855f7', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#eab308'];
 
 // Helper to group matchmaking players and start game
 function createMatchmakingRoom(group) {
@@ -52,7 +53,9 @@ function createMatchmakingRoom(group) {
     isReady: true, // Auto ready for matchmaking
     isHost: idx === 0,
     finished: false,
-    finishRank: null
+    finishRank: null,
+    carType: 'f1',
+    carColor: DEFAULT_CAR_COLORS[idx % DEFAULT_CAR_COLORS.length]
   }));
 
   rooms[roomId] = {
@@ -280,7 +283,9 @@ io.on("connection", (socket) => {
         isReady: true, // Host is ready by default
         isHost: true,
         finished: false,
-        finishRank: null
+        finishRank: null,
+        carType: 'f1',
+        carColor: '#06b6d4'
       };
 
       rooms[roomId] = {
@@ -345,7 +350,9 @@ io.on("connection", (socket) => {
         isReady: false,
         isHost: false,
         finished: false,
-        finishRank: null
+        finishRank: null,
+        carType: 'f1',
+        carColor: DEFAULT_CAR_COLORS[room.players.length % DEFAULT_CAR_COLORS.length]
       };
 
       room.players.push(newPlayer);
@@ -411,6 +418,30 @@ io.on("connection", (socket) => {
       if (allReady && room.players.length >= 1) {
         startCountdown(code);
       }
+    }
+  });
+
+  // 3.5 Customize Car
+  socket.on("customize-car", ({ roomId, carType, carColor }) => {
+    const code = roomId?.trim().toUpperCase();
+    const room = rooms[code];
+    if (!room) return;
+
+    const player = room.players.find((p) => p.id === socket.id);
+    if (player) {
+      player.carType = carType;
+      player.carColor = carColor;
+      console.log(`Player ${player.name} in Room ${code} customized car: type=${carType}, color=${carColor}`);
+
+      io.to(code).emit("room-updated", {
+        id: room.id,
+        text: room.text,
+        status: room.status,
+        countdown: room.countdown,
+        timeLeft: room.timeLeft,
+        players: room.players,
+        mode: room.mode
+      });
     }
   });
 

@@ -11,6 +11,7 @@ interface GameLobbyProps {
   onStartGame: () => void;
   onLeaveRoom: () => void;
   onSetRoomMode?: (mode: 'normal' | 'hardcore' | 'blind' | 'code', customText?: string, language?: string) => void;
+  onCustomizeCar?: (carType: 'f1' | 'hover' | 'muscle' | 'scooter', carColor: string) => void;
 }
 
 export const GameLobby: React.FC<GameLobbyProps> = ({
@@ -21,7 +22,8 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
   onToggleReady,
   onStartGame,
   onLeaveRoom,
-  onSetRoomMode
+  onSetRoomMode,
+  onCustomizeCar
 }) => {
   const [copied, setCopied] = useState(false);
   const [messageText, setMessageText] = useState('');
@@ -249,6 +251,103 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
           </div>
         )}
 
+        {/* Customize Your Ride */}
+        <div style={{ 
+          background: 'rgba(0,0,0,0.3)', 
+          border: '1px solid var(--primary)', 
+          boxShadow: '0 0 15px rgba(139, 92, 246, 0.15)',
+          padding: '1.25rem', 
+          borderRadius: '12px', 
+          display: 'flex', 
+          flexDirection: 'column', 
+          gap: '1rem' 
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.5rem' }}>
+            <span style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              🏎️ Customize Your Ride
+            </span>
+          </div>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', alignItems: 'center' }}>
+            {/* Vehicle Type */}
+            <div>
+              <label style={{ fontSize: '0.8rem', textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem' }}>
+                Vehicle Class
+              </label>
+              <select
+                value={me?.carType || 'f1'}
+                onChange={(e) => {
+                  const type = e.target.value as any;
+                  onCustomizeCar?.(type, me?.carColor || '#06b6d4');
+                }}
+                style={{
+                  background: 'var(--bg-dark)',
+                  color: 'var(--text-primary)',
+                  border: '1px solid var(--border-color)',
+                  padding: '0.5rem 0.8rem',
+                  borderRadius: '6px',
+                  fontSize: '0.95rem',
+                  fontFamily: 'var(--font-sans)',
+                  fontWeight: 600,
+                  outline: 'none',
+                  cursor: 'pointer',
+                  width: '100%'
+                }}
+              >
+                <option value="f1">🏁 Sleek F1 Race Car</option>
+                <option value="hover">🛸 Cyberpunk Hover-car</option>
+                <option value="muscle">🔥 Retro Muscle Car</option>
+                <option value="scooter">🛵 Agile Scooter</option>
+              </select>
+            </div>
+
+            {/* Neon Paint Color */}
+            <div>
+              <label style={{ fontSize: '0.8rem', textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem' }}>
+                Neon Paint Color
+              </label>
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                {['#06b6d4', '#a855f7', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#eab308'].map((color) => (
+                  <button
+                    key={color}
+                    onClick={() => {
+                      onCustomizeCar?.(me?.carType || 'f1', color);
+                    }}
+                    style={{
+                      width: '26px',
+                      height: '26px',
+                      borderRadius: '50%',
+                      background: color,
+                      border: me?.carColor === color ? '2px solid #fff' : '2px solid transparent',
+                      boxShadow: me?.carColor === color 
+                        ? `0 0 10px ${color}` 
+                        : '0 2px 4px rgba(0,0,0,0.3)',
+                      cursor: 'pointer',
+                      padding: 0,
+                      transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'scale(1.2)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'scale(1)';
+                    }}
+                    title={
+                      color === '#06b6d4' ? 'Neon Cyan' :
+                      color === '#a855f7' ? 'Neon Purple' :
+                      color === '#10b981' ? 'Neon Green' :
+                      color === '#f59e0b' ? 'Neon Orange' :
+                      color === '#ef4444' ? 'Neon Red' :
+                      color === '#ec4899' ? 'Neon Pink' :
+                      'Neon Yellow'
+                    }
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Player Grid */}
         <div>
           <h3 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem', display: 'flex', justifyContent: 'space-between' }}>
@@ -280,11 +379,13 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
                     width: '48px', 
                     height: '48px', 
                     borderRadius: '50%', 
-                    background: isMe ? 'var(--secondary)' : 'var(--primary)',
+                    background: `linear-gradient(135deg, ${player.carColor || '#06b6d4'} 0%, var(--bg-dark) 100%)`,
                     display: 'flex', 
                     alignItems: 'center', 
                     justifyContent: 'center',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
+                    boxShadow: `0 4px 14px ${(player.carColor || '#06b6d4')}80`,
+                    border: `1.5px solid ${player.carColor || '#06b6d4'}`,
+                    transition: 'all 0.3s ease'
                   }}>
                     {player.isHost ? <Crown size={22} color="#fff" /> : <User size={22} color="#fff" />}
                   </div>
@@ -292,6 +393,12 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
                   <div>
                     <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '1.05rem' }}>
                       {player.name} {isMe && <span style={{ fontSize: '0.8rem', opacity: 0.7 }}>(You)</span>}
+                    </div>
+                    <div style={{ fontSize: '0.8rem', fontWeight: 600, color: player.carColor || '#06b6d4', textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: '0.1rem' }}>
+                      {player.carType === 'f1' ? '🏎️ F1 Racer' :
+                       player.carType === 'hover' ? '🛸 Hover-car' :
+                       player.carType === 'muscle' ? '🔥 Muscle' :
+                       '🛵 Scooter'}
                     </div>
                   </div>
 

@@ -153,51 +153,189 @@ export const RacetrackCanvas: React.FC<RacetrackCanvasProps> = ({ room, myId }) 
         const carX = startX + t * (endX - startX);
         const carY = PADDING_Y + idx * LANE_HEIGHT + LANE_HEIGHT / 2;
 
+        const carType = player.carType || 'f1';
+        const carColor = player.carColor || (isMe ? '#06b6d4' : '#8b5cf6');
+
         ctx.save();
         ctx.translate(carX, carY);
         // Straight road means carAngle = 0
 
         // Draw car glow shadow
-        ctx.shadowColor = isMe ? '#06b6d4' : '#8b5cf6'; // Cyan vs Purple
-        ctx.shadowBlur = isMe ? 10 : 6;
+        ctx.shadowColor = carColor;
+        ctx.shadowBlur = isMe ? 12 : 8;
 
-        // Draw car main chassis (facing right)
-        ctx.fillStyle = isMe ? '#06b6d4' : '#8b5cf6';
-        ctx.beginPath();
-        // Nosecone front (right), wider engine sidepods rear (left)
-        ctx.moveTo(10, -3);
-        ctx.lineTo(4, -3);
-        ctx.lineTo(4, -5);
-        ctx.lineTo(-6, -5);
-        ctx.lineTo(-8, -2);
-        ctx.lineTo(-8, 2);
-        ctx.lineTo(-6, 5);
-        ctx.lineTo(4, 5);
-        ctx.lineTo(4, 3);
-        ctx.lineTo(10, 3);
-        ctx.closePath();
-        ctx.fill();
+        if (carType === 'f1') {
+          // F1 body
+          ctx.fillStyle = carColor;
+          ctx.beginPath();
+          ctx.moveTo(12, 0); // Front point
+          ctx.lineTo(4, -2);
+          ctx.lineTo(4, -4);
+          ctx.lineTo(-7, -4);
+          ctx.lineTo(-9, -2);
+          ctx.lineTo(-9, 2);
+          ctx.lineTo(-7, 4);
+          ctx.lineTo(4, 4);
+          ctx.lineTo(4, 2);
+          ctx.closePath();
+          ctx.fill();
 
-        // Draw spoiler (rear wing)
-        ctx.shadowBlur = 0; // Disable shadow for details
-        ctx.fillStyle = '#0c0d12';
-        ctx.fillRect(-9, -6, 2, 12);
-        ctx.fillStyle = isMe ? '#06b6d4' : '#8b5cf6';
-        ctx.fillRect(-9, -8, 2, 2);
-        ctx.fillRect(-9, 6, 2, 2);
+          ctx.shadowBlur = 0; // Disable shadow for details
 
-        // Draw wheels
-        ctx.fillStyle = '#020205';
-        ctx.fillRect(-5, -7, 4, 2); // Rear-left
-        ctx.fillRect(-5, 5, 4, 2);  // Rear-right
-        ctx.fillRect(3, -6, 4, 2);  // Front-left
-        ctx.fillRect(3, 4, 4, 2);   // Front-right
+          // Wheels
+          ctx.fillStyle = '#020205';
+          ctx.fillRect(-6, -7, 5, 2.5); // Rear-left
+          ctx.fillRect(-6, 4.5, 5, 2.5); // Rear-right
+          ctx.fillRect(3, -6, 4, 2);    // Front-left
+          ctx.fillRect(3, 4, 4, 2);     // Front-right
 
-        // Draw helmet/cockpit
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.arc(0, 0, 2, 0, Math.PI * 2);
-        ctx.fill();
+          // Spoiler (wing)
+          ctx.fillStyle = '#0c0d12';
+          ctx.fillRect(-10, -6, 2, 12);
+          ctx.fillStyle = carColor;
+          ctx.fillRect(-10, -8, 2, 2);
+          ctx.fillRect(-10, 6, 2, 2);
+
+          // Helmet/Cockpit
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.arc(0, 0, 2.5, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (carType === 'hover') {
+          // Hover-car body
+          ctx.fillStyle = carColor;
+          ctx.beginPath();
+          ctx.moveTo(12, 0); // Nose
+          ctx.lineTo(6, -3);
+          ctx.lineTo(4, -5);
+          ctx.lineTo(-4, -6);
+          ctx.lineTo(-9, -4);
+          ctx.lineTo(-9, 4);
+          ctx.lineTo(-4, 6);
+          ctx.lineTo(6, 3);
+          ctx.closePath();
+          ctx.fill();
+
+          ctx.shadowBlur = 0; // Disable shadow for details
+
+          // Back Fins / Thruster details
+          ctx.fillStyle = '#0c0d12';
+          ctx.beginPath();
+          ctx.moveTo(-9, -2);
+          ctx.lineTo(-11, -1);
+          ctx.lineTo(-11, 1);
+          ctx.lineTo(-9, 2);
+          ctx.closePath();
+          ctx.fill();
+
+          // Neon Side Vent Lines
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(2, -3);
+          ctx.lineTo(-5, -4);
+          ctx.moveTo(2, 3);
+          ctx.lineTo(-5, 4);
+          ctx.stroke();
+
+          // Thruster flame
+          ctx.fillStyle = 'rgba(251, 146, 60, 0.85)'; // bright orange
+          ctx.beginPath();
+          ctx.moveTo(-11, -1.5);
+          ctx.lineTo(-17 - Math.random() * 4, 0); // Flickering flame
+          ctx.lineTo(-11, 1.5);
+          ctx.closePath();
+          ctx.fill();
+
+          // Cabin glass
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+          ctx.beginPath();
+          ctx.arc(1, 0, 2, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (carType === 'muscle') {
+          // Muscle body
+          ctx.fillStyle = carColor;
+          ctx.beginPath();
+          ctx.moveTo(11, -4); // Front left bumper
+          ctx.lineTo(11, 4);  // Front right bumper
+          ctx.lineTo(10, 5);
+          ctx.lineTo(-10, 5); // Rear right
+          ctx.lineTo(-10, -5); // Rear left
+          ctx.lineTo(10, -5);
+          ctx.closePath();
+          ctx.fill();
+
+          ctx.shadowBlur = 0; // Disable shadow for details
+
+          // Wheels
+          ctx.fillStyle = '#020205';
+          ctx.fillRect(-6, -6.5, 4.5, 2.5); // Rear-left
+          ctx.fillRect(-6, 4, 4.5, 2.5);   // Rear-right
+          ctx.fillRect(3, -6.5, 4, 2.5);    // Front-left
+          ctx.fillRect(3, 4, 4, 2.5);     // Front-right
+
+          // Blower/Intake scoop on hood (silver/chrome center)
+          ctx.fillStyle = '#94a3b8';
+          ctx.fillRect(3, -1.5, 3, 3);
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(5, -1, 1.5, 2); // Intake opening facing front
+
+          // Cabin roof
+          ctx.fillStyle = '#0f172a'; // Dark glass roof
+          ctx.fillRect(-4, -3.5, 5, 7);
+
+          // Racing stripes
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(6, -3, 5, 1);
+          ctx.fillRect(6, 2, 5, 1);
+          ctx.fillRect(-10, -3, 3, 1);
+          ctx.fillRect(-10, 2, 3, 1);
+        } else if (carType === 'scooter') {
+          // Scooter body frame
+          ctx.fillStyle = carColor;
+          ctx.beginPath();
+          // Front shield
+          ctx.moveTo(7, -2);
+          ctx.lineTo(7, 2);
+          ctx.lineTo(5, 3);
+          // Floorboard (narrow middle)
+          ctx.lineTo(5, 1.5);
+          ctx.lineTo(-4, 1.5);
+          // Rear body and seat area
+          ctx.lineTo(-4, 3);
+          ctx.lineTo(-10, 2.5);
+          ctx.lineTo(-10, -2.5);
+          ctx.lineTo(-4, -3);
+          ctx.lineTo(-4, -1.5);
+          ctx.lineTo(5, -1.5);
+          ctx.lineTo(5, -3);
+          ctx.closePath();
+          ctx.fill();
+
+          ctx.shadowBlur = 0; // Disable shadow for details
+
+          // Wheels (front and rear inline central)
+          ctx.fillStyle = '#020205';
+          ctx.fillRect(7, -1, 3, 2);   // Front wheel
+          ctx.fillRect(-9, -1, 3, 2);  // Rear wheel
+
+          // Seat (black center)
+          ctx.fillStyle = '#1e293b';
+          ctx.fillRect(-6, -1.5, 4, 3);
+
+          // Handlebars
+          ctx.strokeStyle = '#64748b';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(5.5, -4);
+          ctx.lineTo(5.5, 4);
+          ctx.stroke();
+
+          // Hand grips
+          ctx.fillStyle = '#020205';
+          ctx.fillRect(5, -5.5, 1.5, 1.5);
+          ctx.fillRect(5, 4, 1.5, 1.5);
+        }
 
         ctx.restore();
 

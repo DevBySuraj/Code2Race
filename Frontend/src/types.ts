@@ -8,6 +8,8 @@ export interface Player {
   isHost: boolean;
   finished: boolean;
   finishRank: number | null;
+  carType: 'f1' | 'hover' | 'muscle' | 'scooter';
+  carColor: string;
 }
 
 export interface Room {

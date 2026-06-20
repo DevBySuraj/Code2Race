@@ -201,6 +201,11 @@ function App() {
     socket.emit('set-room-mode', { roomId: room.id, mode, customText, language });
   };
 
+  const handleCustomizeCar = (carType: 'f1' | 'hover' | 'muscle' | 'scooter', carColor: string) => {
+    if (!room) return;
+    socket.emit('customize-car', { roomId: room.id, carType, carColor });
+  };
+
   return (
     <>
       {/* Header */}
@@ -349,6 +354,7 @@ function App() {
                   onStartGame={handleStartGame}
                   onLeaveRoom={handleLeaveRoom}
                   onSetRoomMode={handleSetRoomMode}
+                  onCustomizeCar={handleCustomizeCar}
                 />
               )}
 
