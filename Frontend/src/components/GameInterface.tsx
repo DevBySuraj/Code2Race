@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { Room } from '../types';
-import { Timer } from 'lucide-react';
+import { Timer, Volume2, VolumeX } from 'lucide-react';
 import { VirtualKeyboard } from './VirtualKeyboard';
 import { RacetrackCanvas } from './RacetrackCanvas';
+import { audioManager } from '../utils/audioManager';
 
 interface GameInterfaceProps {
   room: Room;
@@ -27,15 +28,30 @@ export const GameInterface: React.FC<GameInterfaceProps> = ({
   const [wpm, setWpm] = useState(0);
   const [accuracy, setAccuracy] = useState(100);
 
+  // Audio settings state
+  const [showSoundSettings, setShowSoundSettings] = useState(false);
+  const [soundSettings, setSoundSettings] = useState(audioManager.getSettings());
+
+  const handleSettingChange = (newSettings: Partial<typeof soundSettings>) => {
+    audioManager.saveSettings(newSettings);
+    setSoundSettings(audioManager.getSettings());
+  };
+
   const inputRef = useRef<HTMLInputElement>(null);
   const promptText = room.text;
 
   // Auto-focus input when the game starts or when clicking the typing container
+  // Also start and stop the engine sound loop
   useEffect(() => {
     if (room.status === 'in-progress') {
       inputRef.current?.focus();
       setStartTime(Date.now());
+      audioManager.startEngine();
     }
+    
+    return () => {
+      audioManager.stopEngine();
+    };
   }, [room.status]);
 
   // Calculate live stats
@@ -66,6 +82,9 @@ export const GameInterface: React.FC<GameInterfaceProps> = ({
     setWpm(calculatedWpm);
     setAccuracy(calculatedAccuracy);
 
+    // Dynamic pitch-shifted engine sound
+    audioManager.setEngineWPM(calculatedWpm);
+
     // Progress percentage based on characters typed
     const progressPercent = (typedText.length / promptText.length) * 100;
 
@@ -87,8 +106,27 @@ export const GameInterface: React.FC<GameInterfaceProps> = ({
       if (val.length > 0 && val[val.length - 1] !== promptText[val.length - 1]) {
         setTypedText('');
         setCurrentIndex(0);
+        audioManager.playTireScreech();
+        onProgressUpdate(0, 0, 0); // immediately notify server of reset
         return;
       }
+    }
+
+    // Play click sound
+    audioManager.playClick();
+
+    // Normal/Blind mode typo sound check
+    if (room.mode !== 'hardcore' && val.length > typedText.length) {
+      const isTypo = val[val.length - 1] !== promptText[val.length - 1];
+      if (isTypo) {
+        audioManager.playTireScreech();
+      }
+    }
+
+    // Check if finished
+    if (val.length === promptText.length && typedText.length < promptText.length) {
+      audioManager.stopEngine();
+      audioManager.playFinishSiren();
     }
 
     setTypedText(val);
@@ -122,10 +160,120 @@ export const GameInterface: React.FC<GameInterfaceProps> = ({
               <span>Time Left: <strong style={{ color: room.timeLeft <= 10 ? 'var(--error)' : 'var(--text-primary)' }}>{room.timeLeft}s</strong></span>
             </div>
           </div>
-          <button className="btn btn-outline" onClick={onLeaveRoom} style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}>
-            Leave Race
-          </button>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button 
+              className="btn btn-outline" 
+              onClick={() => handleSettingChange({ muted: !soundSettings.muted })} 
+              style={{ padding: '0.4rem 0.6rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              title={soundSettings.muted ? "Unmute All Sounds" : "Mute All Sounds"}
+            >
+              {soundSettings.muted ? <VolumeX size={16} color="var(--error)" /> : <Volume2 size={16} />}
+            </button>
+            <button 
+              className={`btn ${showSoundSettings ? 'btn-secondary' : 'btn-outline'}`} 
+              onClick={() => setShowSoundSettings(!showSoundSettings)} 
+              style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+            >
+              <Volume2 size={16} /> Sound Options
+            </button>
+            <button className="btn btn-outline" onClick={onLeaveRoom} style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}>
+              Leave Race
+            </button>
+          </div>
         </div>
+
+        {/* Sound Settings Tray */}
+        {showSoundSettings && (
+          <div style={{ 
+            background: 'rgba(0, 0, 0, 0.3)', 
+            border: '1px solid var(--border-color)', 
+            borderRadius: '8px',
+            padding: '1rem',
+            marginBottom: '1rem',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.75rem',
+            fontSize: '0.85rem'
+          }}>
+            <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Audio Configuration</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
+              
+              {/* Mute All Toggle */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                <label style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>Mute All</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.2rem' }}>
+                  <input 
+                    type="checkbox"
+                    checked={soundSettings.muted}
+                    onChange={(e) => handleSettingChange({ muted: e.target.checked })}
+                    style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                  />
+                  <span style={{ color: soundSettings.muted ? 'var(--error)' : 'var(--text-primary)' }}>
+                    {soundSettings.muted ? 'Muted' : 'Unmuted'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Click Switch Selector */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                <label style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>Keyboard Clicks</label>
+                <select 
+                  value={soundSettings.clickType}
+                  onChange={(e) => handleSettingChange({ clickType: e.target.value as any })}
+                  style={{
+                    background: 'var(--bg-dark)',
+                    color: 'var(--text-primary)',
+                    border: '1px solid var(--border-color)',
+                    padding: '0.3rem',
+                    borderRadius: '4px',
+                    outline: 'none',
+                    cursor: 'pointer'
+                  }}
+                  disabled={soundSettings.muted}
+                >
+                  <option value="off">Muted</option>
+                  <option value="blue">Mechanical Blue</option>
+                  <option value="linear">Silent Linear</option>
+                  <option value="typewriter">Retro Typewriter</option>
+                </select>
+              </div>
+
+              {/* Engine Audio Toggle */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                <label style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>F1 Engine Sound</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.2rem' }}>
+                  <input 
+                    type="checkbox"
+                    checked={soundSettings.engineEnabled}
+                    onChange={(e) => handleSettingChange({ engineEnabled: e.target.checked })}
+                    style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                    disabled={soundSettings.muted}
+                  />
+                  <span>Enable engine loops</span>
+                </div>
+              </div>
+
+              {/* Master Volume Slider */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                <label style={{ fontWeight: 600, color: 'var(--text-secondary)', display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Volume</span>
+                  <span>{Math.round(soundSettings.volume * 100)}%</span>
+                </label>
+                <input 
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={soundSettings.volume}
+                  onChange={(e) => handleSettingChange({ volume: parseFloat(e.target.value) })}
+                  style={{ width: '100%', cursor: 'pointer', accentColor: 'var(--secondary)' }}
+                  disabled={soundSettings.muted}
+                />
+              </div>
+
+            </div>
+          </div>
+        )}
 
         {/* Hidden Input to capture typing */}
         <input

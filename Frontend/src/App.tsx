@@ -4,6 +4,7 @@ import type { Room, ChatMessage } from './types';
 import { GameLobby } from './components/GameLobby';
 import { GameInterface } from './components/GameInterface';
 import { GameLeaderboard } from './components/GameLeaderboard';
+import { audioManager } from './utils/audioManager';
 import { Keyboard, ArrowRight, Play, AlertCircle, Sparkles, Loader2 } from 'lucide-react';
 import './App.css';
 
@@ -56,6 +57,7 @@ function App() {
     });
 
     socket.on('countdown-tick', ({ countdown }) => {
+      audioManager.playCountdownBeep(false);
       setRoom(prev => {
         if (!prev) return null;
         return { ...prev, countdown };
@@ -63,6 +65,7 @@ function App() {
     });
 
     socket.on('game-started', ({ text, timeLeft }) => {
+      audioManager.playCountdownBeep(true);
       setRoom(prev => {
         if (!prev) return null;
         return { ...prev, status: 'in-progress', text, timeLeft };
