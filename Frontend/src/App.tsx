@@ -196,9 +196,9 @@ function App() {
     socket.emit('leave-matchmaking');
   };
 
-  const handleSetRoomMode = (mode: 'normal' | 'hardcore' | 'blind') => {
+  const handleSetRoomMode = (mode: 'normal' | 'hardcore' | 'blind' | 'code', customText?: string, language?: string) => {
     if (!room) return;
-    socket.emit('set-room-mode', { roomId: room.id, mode });
+    socket.emit('set-room-mode', { roomId: room.id, mode, customText, language });
   };
 
   return (

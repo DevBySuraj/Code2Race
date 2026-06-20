@@ -3,6 +3,7 @@ import { createServer } from "http";
 import { Server } from "socket.io";
 import cors from "cors";
 import { getRandomParagraph } from "./paragraphs.js";
+import { getRandomAnyPreset, getRandomCodePreset } from "./codePresets.js";
 
 const app = express();
 app.use(cors());
@@ -229,7 +230,7 @@ io.on("connection", (socket) => {
   });
 
   // Room mode settings (Host only)
-  socket.on("set-room-mode", ({ roomId, mode }) => {
+  socket.on("set-room-mode", ({ roomId, mode, customText, language }) => {
     const code = roomId?.trim().toUpperCase();
     const room = rooms[code];
     if (!room || room.status !== "waiting") return;
@@ -238,6 +239,18 @@ io.on("connection", (socket) => {
     const player = room.players.find((p) => p.id === socket.id);
     if (player && player.isHost) {
       room.mode = mode;
+
+      if (mode === "code") {
+        if (customText) {
+          room.text = customText;
+        } else {
+          room.text = getRandomCodePreset(language);
+        }
+      } else {
+        // Reset to normal paragraph if transitioning back
+        room.text = getRandomParagraph();
+      }
+
       console.log(`Room ${code} mode set to ${mode}`);
 
       io.to(code).emit("room-updated", {
@@ -468,7 +481,7 @@ io.on("connection", (socket) => {
     if (player && player.isHost) {
       clearRoomTimer(room);
       room.status = "waiting";
-      room.text = getRandomParagraph();
+      room.text = room.mode === "code" ? getRandomAnyPreset() : getRandomParagraph();
       room.countdown = 5;
       room.timeLeft = 60;
 

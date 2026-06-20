@@ -38,7 +38,7 @@ export const GameInterface: React.FC<GameInterfaceProps> = ({
   };
 
   const inputRef = useRef<HTMLInputElement>(null);
-  const promptText = room.text;
+  const promptText = room.text.replace(/\r\n/g, '\n');
 
   // Auto-focus input when the game starts or when clicking the typing container
   // Also start and stop the engine sound loop
@@ -131,6 +131,69 @@ export const GameInterface: React.FC<GameInterfaceProps> = ({
 
     setTypedText(val);
     setCurrentIndex(val.length);
+  };
+
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (room.status !== 'in-progress' || currentIndex === promptText.length) return;
+
+    if (e.key === 'Enter') {
+      const nextChar = promptText[currentIndex];
+      if (nextChar === '\n') {
+        e.preventDefault();
+        audioManager.playClick();
+        
+        const newVal = typedText + '\n';
+        setTypedText(newVal);
+        setCurrentIndex(newVal.length);
+
+        // Check if finished
+        if (newVal.length === promptText.length) {
+          audioManager.stopEngine();
+          audioManager.playFinishSiren();
+        }
+      }
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      // Auto-indent assist: fill matching spaces/tabs
+      let spacesToAppend = '';
+      let i = currentIndex;
+      while (i < promptText.length && (promptText[i] === ' ' || promptText[i] === '\t')) {
+        spacesToAppend += promptText[i];
+        i++;
+      }
+
+      if (spacesToAppend.length > 0) {
+        audioManager.playClick();
+        
+        const newVal = typedText + spacesToAppend;
+        setTypedText(newVal);
+        setCurrentIndex(newVal.length);
+
+        // Check if finished
+        if (newVal.length === promptText.length) {
+          audioManager.stopEngine();
+          audioManager.playFinishSiren();
+        }
+      }
+    }
+  };
+
+  // Split prompt text into lines, keeping track of global character index for each character.
+  const getCodeLines = () => {
+    let globalIndex = 0;
+    const lines = promptText.split('\n');
+    return lines.map((line, lineIdx) => {
+      const chars = line.split('').map((char) => {
+        const charIdx = globalIndex++;
+        return { char, index: charIdx };
+      });
+      // The newline character at the end of the line (except the last line)
+      let newline = null;
+      if (lineIdx < lines.length - 1) {
+        newline = { char: '\n', index: globalIndex++ };
+      }
+      return { chars, newline, lineIdx };
+    });
   };
 
   const handleContainerClick = () => {
@@ -281,6 +344,7 @@ export const GameInterface: React.FC<GameInterfaceProps> = ({
           type="text"
           value={typedText}
           onChange={handleInputChange}
+          onKeyDown={handleInputKeyDown}
           style={{
             position: 'absolute',
             opacity: 0,
@@ -295,37 +359,138 @@ export const GameInterface: React.FC<GameInterfaceProps> = ({
         />
 
         {/* Typing prompt rendering */}
-        <div 
-          className="typing-prompt-container"
-          onClick={handleContainerClick}
-          style={{ cursor: 'text' }}
-        >
-          {promptText.split('').map((char, index) => {
-            const classes = ['char'];
-            
-            if (index < currentIndex) {
-              if (typedText[index] === char) {
-                classes.push('char-correct');
-              } else {
-                classes.push('char-incorrect');
+        {room.mode === 'code' ? (
+          <div 
+            className="code-editor-container"
+            onClick={handleContainerClick}
+            style={{
+              background: '#0c0d12',
+              border: '1px solid var(--border-color)',
+              borderRadius: '8px',
+              padding: '0.75rem 0',
+              fontFamily: 'Consolas, Monaco, "Courier New", monospace',
+              fontSize: '0.95rem',
+              color: 'var(--text-secondary)',
+              cursor: 'text',
+              maxHeight: '260px',
+              overflowY: 'auto',
+              lineHeight: '1.5'
+            }}
+          >
+            {getCodeLines().map((lineData) => (
+              <div 
+                key={lineData.lineIdx} 
+                style={{ 
+                  display: 'flex', 
+                  background: lineData.chars.some(c => c.index === currentIndex) || (lineData.newline && lineData.newline.index === currentIndex)
+                    ? 'rgba(255, 255, 255, 0.03)' // highlight active line
+                    : 'transparent'
+                }}
+              >
+                {/* Line number gutter */}
+                <div style={{
+                  width: '36px',
+                  textAlign: 'right',
+                  paddingRight: '0.8rem',
+                  userSelect: 'none',
+                  color: 'rgba(255, 255, 255, 0.2)',
+                  borderRight: '1px solid rgba(255, 255, 255, 0.05)',
+                  marginRight: '0.8rem',
+                  fontWeight: 600
+                }}>
+                  {lineData.lineIdx + 1}
+                </div>
+
+                {/* Line content */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', whiteSpace: 'pre' }}>
+                  {lineData.chars.map((charData) => {
+                    const idx = charData.index;
+                    const char = charData.char;
+                    const isMe = idx === currentIndex;
+                    const hasTyped = idx < currentIndex;
+                    
+                    const classes = ['char'];
+                    if (hasTyped) {
+                      if (typedText[idx] === char) {
+                        classes.push('char-correct');
+                      } else {
+                        classes.push('char-incorrect');
+                      }
+                    }
+                    if (isMe) {
+                      classes.push('char-current');
+                    }
+
+                    // Render spaces as light dots
+                    const displayChar = char === ' ' ? '·' : char;
+
+                    return (
+                      <span key={idx} className={classes.join(' ')} style={{ opacity: char === ' ' ? 0.35 : 1 }}>
+                        {displayChar}
+                      </span>
+                    );
+                  })}
+
+                  {/* Render newline carriage return helper */}
+                  {lineData.newline && (() => {
+                    const idx = lineData.newline.index;
+                    const isMe = idx === currentIndex;
+                    const hasTyped = idx < currentIndex;
+                    const classes = ['char', 'char-newline'];
+                    if (hasTyped) {
+                      classes.push('char-correct');
+                    }
+                    if (isMe) {
+                      classes.push('char-current');
+                    }
+                    return (
+                      <span key={idx} className={classes.join(' ')} style={{ 
+                        marginLeft: '0.2rem', 
+                        opacity: 0.4, 
+                        fontWeight: 'bold',
+                        color: isMe ? 'var(--secondary)' : 'var(--text-muted)'
+                      }}>
+                        ↵
+                      </span>
+                    );
+                  })()}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div 
+            className="typing-prompt-container"
+            onClick={handleContainerClick}
+            style={{ cursor: 'text' }}
+          >
+            {promptText.split('').map((char, index) => {
+              const classes = ['char'];
+              
+              if (index < currentIndex) {
+                if (typedText[index] === char) {
+                  classes.push('char-correct');
+                } else {
+                  classes.push('char-incorrect');
+                }
               }
-            }
-            if (index === currentIndex) {
-              classes.push('char-current');
-            }
+              if (index === currentIndex) {
+                classes.push('char-current');
+              }
 
-            // Blind mode obfuscation
-            const displayChar = (room.mode === 'blind' && index > currentIndex)
-              ? (char === ' ' ? ' ' : '•')
-              : char;
+              // Blind mode obfuscation
+              const displayChar = (room.mode === 'blind' && index > currentIndex)
+                ? (char === ' ' ? ' ' : '•')
+                : char;
 
-            return (
-              <span key={index} className={classes.join(' ')}>
-                {displayChar}
-              </span>
-            );
-          })}
-        </div>
+              return (
+                <span key={index} className={classes.join(' ')}>
+                  {displayChar}
+                </span>
+              );
+            })}
+          </div>
+        )}
 
         <div style={{ textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
           {currentIndex === promptText.length ? (

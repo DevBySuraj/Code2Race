@@ -17,7 +17,7 @@ export interface Room {
   countdown: number;
   timeLeft: number;
   players: Player[];
-  mode: 'normal' | 'hardcore' | 'blind';
+  mode: 'normal' | 'hardcore' | 'blind' | 'code';
 }
 
 export interface ChatMessage {

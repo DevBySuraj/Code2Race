@@ -10,7 +10,7 @@ interface GameLobbyProps {
   onToggleReady: (ready: boolean) => void;
   onStartGame: () => void;
   onLeaveRoom: () => void;
-  onSetRoomMode?: (mode: 'normal' | 'hardcore' | 'blind') => void;
+  onSetRoomMode?: (mode: 'normal' | 'hardcore' | 'blind' | 'code', customText?: string, language?: string) => void;
 }
 
 export const GameLobby: React.FC<GameLobbyProps> = ({
@@ -26,6 +26,21 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
   const [copied, setCopied] = useState(false);
   const [messageText, setMessageText] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Code Mode States
+  const [codeLanguage, setCodeLanguage] = useState('javascript');
+  const [customCode, setCustomCode] = useState('');
+  const [showCustomInput, setShowCustomInput] = useState(false);
+
+  const handleLanguageChange = (lang: string) => {
+    setCodeLanguage(lang);
+    onSetRoomMode?.('code', undefined, lang);
+  };
+
+  const handleCustomCodeChange = (text: string) => {
+    setCustomCode(text);
+    onSetRoomMode?.('code', text, undefined);
+  };
 
   const me = room.players.find(p => p.id === myId);
   const isHost = me?.isHost || false;
@@ -86,7 +101,7 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
               <div style={{ marginTop: '0.25rem' }}>
                 <select
                   value={room.mode || 'normal'}
-                  onChange={(e) => onSetRoomMode?.(e.target.value as 'normal' | 'hardcore' | 'blind')}
+                  onChange={(e) => onSetRoomMode?.(e.target.value as any)}
                   style={{
                     background: 'var(--bg-dark)',
                     color: 'var(--text-primary)',
@@ -103,11 +118,18 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
                   <option value="normal">Normal (Free Typing)</option>
                   <option value="hardcore">Hardcore (Typo resets to 0)</option>
                   <option value="blind">Blind (Letters are hidden)</option>
+                  <option value="code">Code (Programming Syntax)</option>
                 </select>
               </div>
             ) : (
               <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--primary)', marginTop: '0.25rem' }}>
-                {room.mode === 'hardcore' ? 'Hardcore Mode' : room.mode === 'blind' ? 'Blind Mode' : 'Normal Mode'}
+                {room.mode === 'hardcore' 
+                  ? 'Hardcore Mode' 
+                  : room.mode === 'blind' 
+                  ? 'Blind Mode' 
+                  : room.mode === 'code'
+                  ? 'Code Racing Mode'
+                  : 'Normal Mode'}
               </div>
             )}
           </div>
@@ -116,9 +138,116 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
               ? 'Warning: Any typo resets your progress to 0%!' 
               : room.mode === 'blind' 
               ? 'Blind: All letters ahead of the cursor are hidden!' 
+              : room.mode === 'code'
+              ? 'Code: Race typing raw code syntax, braces, & tabs!'
               : 'Normal: Free-typing. Backspace to correct errors.'}
           </div>
         </div>
+
+        {/* Code Racing Mode Settings */}
+        {room.mode === 'code' && (
+          <div style={{ 
+            background: 'rgba(0,0,0,0.25)', 
+            border: '1px solid var(--border-color)', 
+            padding: '1rem', 
+            borderRadius: '12px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1rem'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+              <div>
+                <span style={{ fontSize: '0.8rem', textTransform: 'uppercase', color: 'var(--text-secondary)', letterSpacing: '0.05em' }}>Language Preset</span>
+                {isHost ? (
+                  <div style={{ marginTop: '0.25rem' }}>
+                    <select
+                      value={codeLanguage}
+                      onChange={(e) => handleLanguageChange(e.target.value)}
+                      style={{
+                        background: 'var(--bg-dark)',
+                        color: 'var(--text-primary)',
+                        border: '1px solid var(--border-color)',
+                        padding: '0.3rem 0.6rem',
+                        borderRadius: '6px',
+                        fontSize: '0.9rem',
+                        outline: 'none',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <option value="javascript">JavaScript</option>
+                      <option value="python">Python</option>
+                      <option value="cpp">C++</option>
+                      <option value="css">CSS</option>
+                    </select>
+                  </div>
+                ) : (
+                  <div style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--secondary)', marginTop: '0.25rem' }}>
+                    Preset Active
+                  </div>
+                )}
+              </div>
+
+              {isHost && (
+                <div>
+                  <button 
+                    className={`btn ${showCustomInput ? 'btn-primary' : 'btn-outline'}`}
+                    onClick={() => setShowCustomInput(!showCustomInput)}
+                    style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
+                  >
+                    {showCustomInput ? 'Use Preset Snippet' : 'Paste Custom Code'}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Custom Paste Text Area */}
+            {isHost && showCustomInput && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <span style={{ fontSize: '0.8rem', textTransform: 'uppercase', color: 'var(--text-secondary)' }}>Paste Custom Code Snippet</span>
+                <textarea
+                  value={customCode}
+                  onChange={(e) => handleCustomCodeChange(e.target.value)}
+                  placeholder="Paste your code block here..."
+                  rows={6}
+                  style={{
+                    background: 'var(--bg-dark)',
+                    color: '#a6e3a1',
+                    border: '1px solid var(--border-color)',
+                    padding: '0.75rem',
+                    borderRadius: '8px',
+                    fontFamily: 'monospace',
+                    fontSize: '0.9rem',
+                    resize: 'vertical',
+                    outline: 'none'
+                  }}
+                />
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                  Note: Line indents and syntax symbols will be preserved. Make sure it isn't too long!
+                </div>
+              </div>
+            )}
+
+            {/* Code Preview */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+              <span style={{ fontSize: '0.8rem', textTransform: 'uppercase', color: 'var(--text-secondary)' }}>Active Code Block Preview</span>
+              <pre style={{
+                background: 'rgba(0,0,0,0.4)',
+                border: '1px solid rgba(255,255,255,0.05)',
+                padding: '0.75rem',
+                borderRadius: '8px',
+                margin: 0,
+                fontSize: '0.85rem',
+                color: '#89b4fa',
+                fontFamily: 'monospace',
+                overflowX: 'auto',
+                whiteSpace: 'pre'
+              }}>
+                {room.text}
+              </pre>
+            </div>
+
+          </div>
+        )}
 
         {/* Player Grid */}
         <div>
