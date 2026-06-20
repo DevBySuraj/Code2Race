@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { io, Socket } from 'socket.io-client';
-import type { Room, ChatMessage } from './types';
+import type { Room, ChatMessage, OnlinePlayer } from './types';
 import { GameLobby } from './components/GameLobby';
 import { GameInterface } from './components/GameInterface';
 import { GameLeaderboard } from './components/GameLeaderboard';
 import { audioManager } from './utils/audioManager';
-import { Keyboard, ArrowRight, Play, AlertCircle, Sparkles, Loader2 } from 'lucide-react';
+import { Keyboard, ArrowRight, Play, AlertCircle, Sparkles } from 'lucide-react';
 import './App.css';
 
 // Initialize socket client
@@ -25,6 +25,7 @@ function App() {
   const [isConnected, setIsConnected] = useState(false);
   const [isSearchingMatch, setIsSearchingMatch] = useState(false);
   const [searchTimer, setSearchTimer] = useState(0);
+  const [onlinePlayers, setOnlinePlayers] = useState<OnlinePlayer[]>([]);
 
   // Initialize socket connection
   useEffect(() => {
@@ -35,11 +36,19 @@ function App() {
     socket.on('connect', () => {
       setIsConnected(true);
       console.log('Connected to server, socket ID:', socket.id);
+      const savedName = localStorage.getItem('keyracer_username');
+      if (savedName) {
+        socket.emit('update-name', { name: savedName });
+      }
     });
 
     socket.on('disconnect', () => {
       setIsConnected(false);
       console.log('Disconnected from server');
+    });
+
+    socket.on('online-players-updated', (players: OnlinePlayer[]) => {
+      setOnlinePlayers(players);
     });
 
     socket.on('room-joined', ({ room: joinedRoom, myId: clientId }) => {
@@ -107,6 +116,7 @@ function App() {
       socket.off('game-finished');
       socket.off('chat-msg');
       socket.off('error-msg');
+      socket.off('online-players-updated');
     };
   }, []);
 
@@ -114,6 +124,9 @@ function App() {
   const handleNameChange = (val: string) => {
     setPlayerName(val);
     localStorage.setItem('keyracer_username', val);
+    if (socket && socket.connected) {
+      socket.emit('update-name', { name: val });
+    }
   };
 
   const handleCreateRoom = () => {
@@ -269,23 +282,181 @@ function App() {
       {/* Main Content Area */}
       <main style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
         {isSearchingMatch ? (
-          /* Matchmaking Loading Overlay */
-          <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', alignItems: 'center', textAlign: 'center', maxWidth: '400px', margin: '0 auto', width: '100%', padding: '2.5rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'center' }}>
-              <Loader2 className="pulse-glow" size={48} color="var(--secondary)" style={{ animation: 'spin 1.5s linear infinite' }} />
+          /* Matchmaking Screen: Live Starting Grid & Online List */
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '2rem', maxWidth: '950px', margin: '0 auto', width: '100%' }}>
+            
+            {/* Left Column: Starting Grid (Matchmaking Gates) */}
+            <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', minHeight: '400px' }}>
+              <div style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    🚦 Matchmaking Starting Grid
+                  </h2>
+                  <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                    Forming lobby. Countdown starts when 2+ players line up!
+                  </p>
+                </div>
+                
+                <div style={{ background: 'rgba(6, 182, 212, 0.1)', border: '1px solid var(--secondary)', color: 'var(--secondary)', padding: '0.4rem 0.8rem', borderRadius: '8px', fontWeight: 800, fontSize: '1.1rem' }}>
+                  Elapsed: {searchTimer}s
+                </div>
+              </div>
+
+              {/* Grid slots (max 4 players shown in matchmaking lineup) */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem', flexGrow: 1 }}>
+                {Array.from({ length: 4 }).map((_, index) => {
+                  const searchingPlayers = onlinePlayers.filter(p => p.status === 'searching');
+                  const player = searchingPlayers[index];
+                  const isMe = player?.id === socket?.id;
+
+                  return (
+                    <div 
+                      key={index} 
+                      style={{ 
+                        border: player 
+                          ? (isMe ? '2px solid var(--secondary)' : '1px solid rgba(255,255,255,0.15)') 
+                          : '1px dashed rgba(255,255,255,0.15)', 
+                        background: player 
+                          ? (isMe ? 'rgba(6, 182, 212, 0.06)' : 'rgba(255,255,255,0.02)') 
+                          : 'rgba(0,0,0,0.15)', 
+                        borderRadius: '12px',
+                        padding: '1.25rem',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                        position: 'relative',
+                        boxShadow: player && isMe ? '0 0 15px rgba(6, 182, 212, 0.15)' : 'none',
+                        transition: 'all 0.3s ease'
+                      }}
+                    >
+                      {/* Grid Position Label */}
+                      <span style={{ 
+                        position: 'absolute', 
+                        top: '0.5rem', 
+                        left: '0.75rem', 
+                        fontSize: '0.75rem', 
+                        fontWeight: 800, 
+                        color: player ? 'var(--text-secondary)' : 'var(--text-muted)' 
+                      }}>
+                        POS {index + 1}
+                      </span>
+
+                      {player ? (
+                        <>
+                          <div className="pulse-glow" style={{ 
+                            width: '40px', 
+                            height: '40px', 
+                            borderRadius: '50%', 
+                            background: isMe ? 'var(--secondary)' : 'var(--primary)',
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center',
+                            fontWeight: 'bold',
+                            color: '#fff',
+                            boxShadow: '0 4px 10px rgba(0,0,0,0.3)'
+                          }}>
+                            {player.name.substring(0, 2).toUpperCase()}
+                          </div>
+                          
+                          <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.95rem' }}>
+                            {player.name} {isMe && '(You)'}
+                          </span>
+                          
+                          <span style={{ 
+                            fontSize: '0.75rem', 
+                            padding: '0.15rem 0.5rem', 
+                            background: 'rgba(16, 185, 129, 0.15)', 
+                            color: 'var(--success)', 
+                            borderRadius: '10px',
+                            fontWeight: 700,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.05em'
+                          }}>
+                            Lined Up
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <div style={{ 
+                            width: '40px', 
+                            height: '40px', 
+                            borderRadius: '50%', 
+                            border: '1.5px dashed rgba(255,255,255,0.15)',
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center',
+                            fontSize: '1.25rem',
+                            color: 'var(--text-muted)'
+                          }}>
+                            ?
+                          </div>
+                          
+                          <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem', fontWeight: 500 }}>
+                            Awaiting Racer...
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div style={{ display: 'flex', gap: '1rem', marginTop: 'auto', borderTop: '1px solid var(--border-color)', paddingTop: '1rem' }}>
+                <button className="btn btn-outline" onClick={handleLeaveMatchmaking} style={{ flexGrow: 1 }}>
+                  Cancel Matchmaking
+                </button>
+              </div>
             </div>
-            <h2 style={{ margin: 0 }}>Finding Race...</h2>
-            <p style={{ margin: 0, fontSize: '0.95rem' }}>Searching for other racers. Pairing will force-start after 10 seconds.</p>
-            <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--primary)', margin: '0.5rem 0' }}>
-              Elapsed: {searchTimer}s
+
+            {/* Right Column: Online Players Roster */}
+            <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <h3 style={{ margin: 0, borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>
+                🌎 Active Lobby Players
+              </h3>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', overflowY: 'auto', flexGrow: 1, maxHeight: '350px' }}>
+                {onlinePlayers.map((p) => {
+                  const isSelf = p.id === socket?.id;
+                  return (
+                    <div 
+                      key={p.id} 
+                      style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'space-between', 
+                        padding: '0.5rem 0.75rem', 
+                        background: isSelf ? 'rgba(6, 182, 212, 0.05)' : 'rgba(255,255,255,0.01)', 
+                        border: '1px solid rgba(255,255,255,0.05)', 
+                        borderRadius: '6px' 
+                      }}
+                    >
+                      <span style={{ fontSize: '0.9rem', fontWeight: 600, color: isSelf ? 'var(--secondary)' : 'var(--text-primary)' }}>
+                        {p.name} {isSelf && '(You)'}
+                      </span>
+                      
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                        <span style={{ 
+                          width: '6px', 
+                          height: '6px', 
+                          borderRadius: '50%', 
+                          background: p.status === 'searching' ? 'var(--success)' : p.status === 'racing' ? 'var(--error)' : 'var(--text-muted)' 
+                        }} />
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                          {p.status === 'searching' ? 'Queue' : p.status === 'racing' ? 'Race' : 'Idle'}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-            <button className="btn btn-outline" onClick={handleLeaveMatchmaking} style={{ width: '100%' }}>
-              Cancel Search
-            </button>
+
           </div>
         ) : !joined ? (
           /* Home Screen: Join or Create Room */
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '2rem', maxWidth: '500px', margin: '0 auto', width: '100%' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '2rem', maxWidth: '850px', margin: '0 auto', width: '100%' }}>
             
             <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', textAlign: 'center' }}>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
@@ -339,6 +510,71 @@ function App() {
               </div>
             </div>
 
+            {/* Active online players roster widget */}
+            <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', height: '100%', minHeight: '380px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem' }}>
+                <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  👥 Active Racers
+                </h3>
+                <span style={{ fontSize: '0.85rem', padding: '0.2rem 0.5rem', background: 'rgba(255,255,255,0.05)', borderRadius: '12px', fontWeight: 600 }}>
+                  {onlinePlayers.length} online
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', overflowY: 'auto', flexGrow: 1, maxHeight: '350px', paddingRight: '0.25rem' }}>
+                {onlinePlayers.length <= 1 ? (
+                  <div style={{ margin: 'auto', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                    You are the only racer online.<br/>Invite friends to join!
+                  </div>
+                ) : (
+                  onlinePlayers.map((p) => {
+                    const isSelf = p.id === socket?.id;
+                    return (
+                      <div 
+                        key={p.id} 
+                        style={{ 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          justifyContent: 'space-between', 
+                          padding: '0.6rem 0.8rem', 
+                          background: isSelf ? 'rgba(6, 182, 212, 0.05)' : 'rgba(255,255,255,0.01)', 
+                          border: isSelf ? '1.5px solid rgba(6, 182, 212, 0.25)' : '1px solid rgba(255,255,255,0.05)', 
+                          borderRadius: '8px',
+                          transition: 'all 0.2s ease'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <span style={{ fontWeight: 600, fontSize: '0.95rem', color: isSelf ? 'var(--secondary)' : 'var(--text-primary)' }}>
+                            {p.name} {isSelf && '(You)'}
+                          </span>
+                        </div>
+
+                        {/* Status Badge */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          <span style={{ 
+                            width: '8px', 
+                            height: '8px', 
+                            borderRadius: '50%', 
+                            background: p.status === 'searching' ? 'var(--success)' : p.status === 'racing' ? 'var(--error)' : 'var(--text-muted)',
+                            boxShadow: p.status === 'searching' ? '0 0 8px var(--success)' : p.status === 'racing' ? '0 0 8px var(--error)' : 'none',
+                            animation: p.status === 'searching' ? 'pulse 1.5s infinite' : 'none'
+                          }} />
+                          <span style={{ 
+                            fontSize: '0.8rem', 
+                            fontWeight: 600, 
+                            color: p.status === 'searching' ? 'var(--success)' : p.status === 'racing' ? 'var(--error)' : 'var(--text-secondary)',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.05em'
+                          }}>
+                            {p.status === 'searching' ? 'Searching' : p.status === 'racing' ? 'Racing' : 'Idle'}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
           </div>
         ) : (
           /* Game Screens */

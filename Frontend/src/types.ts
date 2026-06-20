@@ -27,3 +27,9 @@ export interface ChatMessage {
   text: string;
   timestamp: string;
 }
+
+export interface OnlinePlayer {
+  id: string;
+  name: string;
+  status: 'idle' | 'searching' | 'racing';
+}

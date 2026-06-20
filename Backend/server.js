@@ -38,6 +38,11 @@ const rooms = {};
 let matchmakingQueue = [];
 let matchmakingTimeout = null;
 const DEFAULT_CAR_COLORS = ['#06b6d4', '#a855f7', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#eab308'];
+const onlinePlayers = {};
+
+function broadcastOnlinePlayers() {
+  io.emit("online-players-updated", Object.values(onlinePlayers));
+}
 
 // Helper to group matchmaking players and start game
 function createMatchmakingRoom(group) {
@@ -70,6 +75,9 @@ function createMatchmakingRoom(group) {
   };
 
   group.forEach((p) => {
+    if (onlinePlayers[p.id]) {
+      onlinePlayers[p.id].status = 'racing';
+    }
     const socket = io.sockets.sockets.get(p.id);
     if (socket) {
       socket.join(roomId);
@@ -88,6 +96,7 @@ function createMatchmakingRoom(group) {
     }
   });
 
+  broadcastOnlinePlayers();
   console.log(`Matchmaking: Created Room ${roomId} for players: ${group.map(p => p.name).join(", ")}`);
   
   // Instantly start the countdown for matchmaking!
@@ -206,6 +215,20 @@ function startCountdown(roomId) {
 io.on("connection", (socket) => {
   console.log(`User connected: ${socket.id}`);
 
+  onlinePlayers[socket.id] = {
+    id: socket.id,
+    name: `Player_${socket.id.substring(0, 4)}`,
+    status: 'idle'
+  };
+  broadcastOnlinePlayers();
+
+  socket.on("update-name", ({ name }) => {
+    if (onlinePlayers[socket.id]) {
+      onlinePlayers[socket.id].name = name;
+      broadcastOnlinePlayers();
+    }
+  });
+
   // Matchmaking handlers
   socket.on("join-matchmaking", ({ playerName }) => {
     // Avoid duplicate queue entry
@@ -214,6 +237,12 @@ io.on("connection", (socket) => {
     const name = playerName || `Player_${socket.id.substring(0, 4)}`;
     matchmakingQueue.push({ id: socket.id, name });
     console.log(`Matchmaking: ${name} (${socket.id}) joined queue. Queue size: ${matchmakingQueue.length}`);
+
+    if (onlinePlayers[socket.id]) {
+      onlinePlayers[socket.id].status = 'searching';
+      onlinePlayers[socket.id].name = name;
+      broadcastOnlinePlayers();
+    }
     
     checkMatchmakingQueue();
   });
@@ -229,6 +258,11 @@ io.on("connection", (socket) => {
         clearTimeout(matchmakingTimeout);
         matchmakingTimeout = null;
       }
+    }
+
+    if (onlinePlayers[socket.id]) {
+      onlinePlayers[socket.id].status = 'idle';
+      broadcastOnlinePlayers();
     }
   });
 
@@ -299,6 +333,12 @@ io.on("connection", (socket) => {
         mode: "normal"
       };
 
+      if (onlinePlayers[socket.id]) {
+        onlinePlayers[socket.id].status = 'racing';
+        onlinePlayers[socket.id].name = playerName || onlinePlayers[socket.id].name;
+        broadcastOnlinePlayers();
+      }
+
       socket.join(roomId);
       console.log(`Room ${roomId} created by ${playerName} (${socket.id})`);
 
@@ -356,6 +396,13 @@ io.on("connection", (socket) => {
       };
 
       room.players.push(newPlayer);
+
+      if (onlinePlayers[socket.id]) {
+        onlinePlayers[socket.id].status = 'racing';
+        onlinePlayers[socket.id].name = playerName || onlinePlayers[socket.id].name;
+        broadcastOnlinePlayers();
+      }
+
       socket.join(code);
       console.log(`Player ${playerName} (${socket.id}) joined room ${code}`);
 
@@ -601,6 +648,11 @@ io.on("connection", (socket) => {
           mode: room.mode
         });
       }
+
+      if (onlinePlayers[socket.id]) {
+        onlinePlayers[socket.id].status = 'idle';
+        broadcastOnlinePlayers();
+      }
     }
   };
 
@@ -612,6 +664,10 @@ io.on("connection", (socket) => {
 
   socket.on("disconnect", () => {
     console.log(`User disconnected: ${socket.id}`);
+
+    delete onlinePlayers[socket.id];
+    broadcastOnlinePlayers();
+
     // Check all rooms and remove this player
     Object.keys(rooms).forEach((roomId) => {
       leaveRoom(roomId);
